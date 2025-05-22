@@ -125,9 +125,24 @@ def generate_embedding(text):
        
        # numpy array를 list로 변환
        if hasattr(embedding, 'tolist'):
-           return embedding.tolist()
+           embedding_list = embedding.tolist()
        else:
-           return embedding
+           embedding_list = embedding
+       
+       # 768차원을 1536차원으로 패딩 (0으로 채움)
+       if len(embedding_list) == 768:
+           # 0으로 패딩하여 1536차원으로 만들기
+           padded_embedding = embedding_list + [0.0] * (1536 - 768)
+           return padded_embedding
+       elif len(embedding_list) == 1536:
+           return embedding_list
+       else:
+           st.warning(f"예상치 못한 임베딩 차원: {len(embedding_list)}")
+           # 1536차원으로 맞추기
+           if len(embedding_list) < 1536:
+               return embedding_list + [0.0] * (1536 - len(embedding_list))
+           else:
+               return embedding_list[:1536]
            
    except Exception as e:
        st.error(f"임베딩 생성 중 오류 발생: {str(e)}")
