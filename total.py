@@ -496,47 +496,46 @@ def generate_answer_with_gpt(query, search_results, source_type):
            date_info = f" (작성일: {date})" if date else ""
            
            # 소스 타입에 맞는 추가 정보
-           # 소스 타입에 맞는 추가 정보
-          if source_type == "블로그" and 'bloggername' in metadata:
-              source_info = f" - 블로거: {metadata['bloggername']}"
-          elif source_type == "뉴스" and 'publisher' in metadata:
-              source_info = f" - 출처: {metadata['publisher']}"
-          elif source_type == "쇼핑" and 'mallname' in metadata:
-              price_info = f", 가격: {metadata.get('lprice', '정보 없음')}원" if 'lprice' in metadata else ""
-              source_info = f" - 판매처: {metadata['mallname']}{price_info}"
-          else:
-              source_info = ""
-          
-          # 유사도 점수 추가
-          similarity = result.get('similarity', 0) * 100
-          similarity_info = f" (유사도: {similarity:.1f}%)"
-          
-          # 출처 타입과 함께 컨텍스트 추가
-          contexts.append(f"문서 {i+1} - [{source_type}] {title}{date_info}{source_info}{similarity_info}:\n{content}\n")
-      
-      context_text = "\n".join(contexts)
-      
-      # 소스 타입에 맞는 프롬프트 생성
-      system_prompt = get_system_prompt(source_type)
-      user_prompt = get_user_prompt(query, context_text, source_type)
+           if source_type == "블로그" and 'bloggername' in metadata:
+               source_info = f" - 블로거: {metadata['bloggername']}"
+           elif source_type == "뉴스" and 'publisher' in metadata:
+               source_info = f" - 출처: {metadata['publisher']}"
+           elif source_type == "쇼핑" and 'mallname' in metadata:
+               price_info = f", 가격: {metadata.get('lprice', '정보 없음')}원" if 'lprice' in metadata else ""
+               source_info = f" - 판매처: {metadata['mallname']}{price_info}"
+           else:
+               source_info = ""
+           
+           # 유사도 점수 추가
+           similarity = result.get('similarity', 0) * 100
+           similarity_info = f" (유사도: {similarity:.1f}%)"
+           
+           # 출처 타입과 함께 컨텍스트 추가
+           contexts.append(f"문서 {i+1} - [{source_type}] {title}{date_info}{source_info}{similarity_info}:\n{content}\n")
+       
+       context_text = "\n".join(contexts)
+       
+       # 소스 타입에 맞는 프롬프트 생성
+       system_prompt = get_system_prompt(source_type)
+       user_prompt = get_user_prompt(query, context_text, source_type)
 
-      # GPT-4o-mini로 답변 생성
-      response = openai_client.chat.completions.create(
-          model="gpt-4o-mini",
-          messages=[
-              {"role": "system", "content": system_prompt},
-              {"role": "user", "content": user_prompt}
-          ],
-          temperature=0.3,  # 일관성 있는 답변을 위해 낮은 온도 설정
-          max_tokens=1000   # 충분한 답변 길이
-      )
-      
-      return response.choices[0].message.content
-      
-  except Exception as e:
-      st.error(f"GPT 답변 생성 중 오류 발생: {str(e)}")
-      return "답변 생성 중 오류가 발생했습니다."
-
+       # GPT-4o-mini로 답변 생성
+       response = openai_client.chat.completions.create(
+           model="gpt-4o-mini",
+           messages=[
+               {"role": "system", "content": system_prompt},
+               {"role": "user", "content": user_prompt}
+           ],
+           temperature=0.3,  # 일관성 있는 답변을 위해 낮은 온도 설정
+           max_tokens=1000   # 충분한 답변 길이
+       )
+       
+       return response.choices[0].message.content
+       
+   except Exception as e:
+       st.error(f"GPT 답변 생성 중 오류 발생: {str(e)}")
+       return "답변 생성 중 오류가 발생했습니다."
+       
 # 메인 UI
 st.title("네이버 통합 검색 & 질의응답")
 st.write("시맨틱 검색 기술을 이용하여 네이버 데이터를 검색하고 질문에 답변합니다.")
