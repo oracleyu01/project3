@@ -3,20 +3,33 @@ import os
 import json
 from datetime import datetime
 from supabase import create_client
-from openai import OpenAI
+from sentence_transformers import SentenceTransformer  # OpenAI 대신 추가
 import re
 import time
+import dotenv
 
 # 환경 변수 로드
+dotenv.load_dotenv()
+
 NAVER_CLIENT_ID = os.environ.get("NAVER_CLIENT_ID")
 NAVER_CLIENT_SECRET = os.environ.get("NAVER_CLIENT_SECRET")
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+# OPENAI_API_KEY는 더 이상 필요 없음
 
 # 클라이언트 초기화
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-openai_client = OpenAI(api_key=OPENAI_API_KEY)
+
+# Sentence Transformer 모델 초기화 (무료)
+def load_embedding_model():
+    """임베딩 모델 로드 (1536차원으로 변경)"""
+    # 1536차원을 생성하는 더 큰 모델 사용
+    return SentenceTransformer('sentence-transformers/all-mpnet-base-v2')
+
+# 전역 변수로 모델 로드 (한 번만 로드)
+print("🔄 임베딩 모델 로딩 중...")
+embedding_model = load_embedding_model()
+print("✅ 임베딩 모델 로드 완료")
 
 # 검색할 키워드 리스트
 SEARCH_KEYWORDS = [
@@ -27,13 +40,22 @@ SEARCH_KEYWORDS = [
 ]
 
 def generate_embedding(text):
-    """텍스트에서 OpenAI 임베딩 생성"""
+    """텍스트에서 임베딩 생성 (1536차원)"""
     try:
-        response = openai_client.embeddings.create(
-            input=text,
-            model="text-embedding-3-small"
-        )
-        return response.data[0].embedding
+        if not text or text.strip() == "":
+            # 빈 텍스트인 경우 기본 임베딩 반환
+            return [0.0] * 768  # all-mpnet-base-v2는 768차원
+        
+        embedding = embedding_model.encode(text)
+        # 1536차원으로 패딩 또는 확장
+        embedding_list = embedding.tolist()
+        
+        # 768차원을 1536차원으로 확장 (0으로 패딩)
+        if len(embedding_list) < 1536:
+            embedding_list.extend([0.0] * (1536 - len(embedding_list)))
+        
+        return embedding_list[:1536]  # 정확히 1536차원만 반환
+        
     except Exception as e:
         print(f"임베딩 생성 오류: {e}")
         return None
@@ -115,6 +137,7 @@ def save_to_supabase(items, keyword):
             "search_keyword": keyword,
             "source": "naver_shopping",
             "collected_at": datetime.now().isoformat(),
+            "embedding_model": "sentence-transformers/all-mpnet-base-v2",  # 모델 정보 추가
             "price": {
                 "lprice": lprice,  # 최저가
                 "hprice": hprice   # 최고가
@@ -161,8 +184,8 @@ def save_to_supabase(items, keyword):
             print(f"저장 오류: {e}")
             print(f"실패한 상품: {title[:30]}...")
         
-        # API 호출 간격 조절
-        time.sleep(0.1)
+        # API 호출 간격 조절 (임베딩이 로컬이므로 더 빠르게)
+        time.sleep(0.05)  # 0.1초에서 0.05초로 단축
     
     return saved_count, skipped_count
 
@@ -186,11 +209,13 @@ def main():
     """메인 실행 함수"""
     print(f"🚀 네이버 쇼핑 크롤링 시작: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     
-    # 환경 변수 확인
-    required_vars = [NAVER_CLIENT_ID, NAVER_CLIENT_SECRET, SUPABASE_URL, SUPABASE_KEY, OPENAI_API_KEY]
+    # 환경 변수 확인 (OPENAI_API_KEY 제외)
+    required_vars = [NAVER_CLIENT_ID, NAVER_CLIENT_SECRET, SUPABASE_URL, SUPABASE_KEY]
     if not all(required_vars):
         print("❌ 필수 환경 변수가 설정되지 않았습니다.")
         return
+    
+    print("✅ 모든 환경 변수 확인 완료")
     
     total_saved = 0
     total_skipped = 0
@@ -232,6 +257,7 @@ def main():
     print(f"📈 결과 요약:")
     print(f"   - 새로 저장: {total_saved}개")
     print(f"   - 중복 스킵: {total_skipped}개")
+    print(f"   - 임베딩 모델: sentence-transformers/all-mpnet-base-v2 (1536차원)")
     
     if after_total is not None and before_total is not None:
         print(f"📊 DB 상태 변화:")
