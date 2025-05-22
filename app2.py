@@ -25,6 +25,8 @@ def load_embedding_model():
     # 1536차원을 생성하는 더 큰 모델 사용
     return SentenceTransformer('sentence-transformers/all-mpnet-base-v2')
 
+embedding_model = load_embedding_model()
+
 def generate_embedding(text):
     """텍스트에서 임베딩 생성 (1536차원)"""
     if not text or text.strip() == "":
