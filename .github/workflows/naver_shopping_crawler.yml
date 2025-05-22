@@ -9,25 +9,33 @@ on:
 jobs:
   crawl-and-store:
     runs-on: ubuntu-latest
-
+    
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-
+      
     - name: Setup Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.9'
-
+        
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+          
     - name: Install dependencies
       run: |
-        pip install requests supabase openai python-dotenv
-
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
     - name: Run crawler
       env:
         NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
         NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
         SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
         SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       run: python crawler.py
