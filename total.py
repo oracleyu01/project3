@@ -474,9 +474,9 @@ def get_system_prompt(source_type):
 문서에 없는 내용은 추가하지 말고 정확한 사실만 전달하세요."""
 
 def get_user_prompt(query, context_text, source_type):
-   """소스 타입에 따른 사용자 프롬프트 생성"""
-   if source_type == "블로그":
-       return f"""다음은 네이버 블로그에서 수집한 데이터입니다:
+    """소스 타입에 따른 사용자 프롬프트 생성"""
+    if source_type == "블로그":
+        return f"""다음은 네이버 블로그에서 수집한 데이터입니다:
 
 {context_text}
 
@@ -492,8 +492,8 @@ def get_user_prompt(query, context_text, source_type):
 6. 출처를 명시할 때는 "문서 2의 블로거에 따르면..."과 같이 표현해주세요.
 7. 제공된 문서 내용만 사용하고, 문서에 없는 내용은 추측하거나 답변하지 마세요."""
 
-   elif source_type == "뉴스":
-       return f"""다음은 네이버 뉴스에서 수집한, 신뢰할 수 있는 언론사의 기사입니다:
+    elif source_type == "뉴스":
+        return f"""다음은 네이버 뉴스에서 수집한, 신뢰할 수 있는 언론사의 기사입니다:
 
 {context_text}
 
@@ -508,8 +508,8 @@ def get_user_prompt(query, context_text, source_type):
 5. 기사들 간에 상충되는 정보가 있다면 이를 언급하고 각 관점을 공정하게 제시하세요.
 6. 제공된 기사 내용만 사용하고, 기사에 없는 내용은 추측하거나 답변하지 마세요."""
 
-  elif source_type == "쇼핑":
-      return f"""다음은 네이버 쇼핑에서 수집한 상품 정보입니다:
+    elif source_type == "쇼핑":
+        return f"""다음은 네이버 쇼핑에서 수집한 상품 정보입니다:
 
 {context_text}
 
@@ -524,8 +524,8 @@ def get_user_prompt(query, context_text, source_type):
 5. 상품의 특징을 비교할 때는 "A 제품은 X 기능이 있지만, B 제품은 Y 기능이 강조됩니다"와 같이 객관적으로 설명해주세요.
 6. 제공된 상품 정보만 사용하고, 문서에 없는 내용은 추측하거나 답변하지 마세요."""
 
-  else:
-      return f"""다음은 네이버 검색에서 수집한 데이터입니다:
+    else:
+        return f"""다음은 네이버 검색에서 수집한 데이터입니다:
 
 {context_text}
 
