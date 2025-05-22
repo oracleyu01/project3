@@ -233,11 +233,30 @@ def search_naver_api(query, source_type, count=20):
                            
                        elif source_type == "뉴스":
                            content = re.sub('<[^<]+?>', '', item.get('description', '')) if item.get('description') else ''
+                           # 뉴스 날짜 필드 확인 및 정리
+                           pub_date = item.get('pubDate', '')
+                           if pub_date:
+                               # 날짜 형식 정리 (예: "Mon, 23 May 2025 10:30:00 +0900" -> "2025-05-23")
+                               try:
+                                   # RFC 2822 형식의 날짜를 파싱
+                                   date_match = re.search(r'(\d{1,2})\s+(\w{3})\s+(\d{4})', pub_date)
+                                   if date_match:
+                                       day, month_name, year = date_match.groups()
+                                       month_map = {
+                                           'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04',
+                                           'May': '05', 'Jun': '06', 'Jul': '07', 'Aug': '08',
+                                           'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
+                                       }
+                                       month = month_map.get(month_name, '01')
+                                       pub_date = f"{year}-{month}-{day.zfill(2)}"
+                               except:
+                                   pass  # 날짜 파싱 실패 시 원본 사용
+                           
                            metadata = {
                                'title': title,
                                'url': item.get('link', ''),
                                'publisher': item.get('publisher', ''),
-                               'date': item.get('pubDate', ''),
+                               'date': pub_date,
                                'collection': source_type
                            }
                            # 개선된 전체 텍스트 구성
@@ -262,6 +281,15 @@ def search_naver_api(query, source_type, count=20):
                        if not full_text.strip() or len(full_text.strip()) < 20:
                            continue
                        
+                       # 뉴스 데이터 디버깅 (임시)
+                       if source_type == "뉴스" and i < 3:  # 처음 3개만 디버깅
+                           st.sidebar.write(f"**뉴스 디버깅 {i+1}:**")
+                           st.sidebar.write(f"- 제목: {title[:50]}...")
+                           st.sidebar.write(f"- 언론사: {item.get('publisher', 'N/A')}")
+                           st.sidebar.write(f"- 날짜: {item.get('pubDate', 'N/A')}")
+                           st.sidebar.write(f"- URL: {item.get('link', 'N/A')[:50]}...")
+                           st.sidebar.write(f"- 내용: {content[:100]}...")
+                       
                        try:
                            # 임베딩 생성
                            embedding = generate_embedding(full_text)
@@ -276,23 +304,52 @@ def search_naver_api(query, source_type, count=20):
                                'metadata': metadata
                            }
                            
-                           # 중복 체크 개선 (제목과 URL 기반)
+                           # 중복 체크 개선 (제목과 URL 기반) - 뉴스용 특별 처리
                            check_title = metadata.get('title', '')
                            check_url = metadata.get('url', '')
                            
-                           # 제목 기반 중복 체크 (더 정확한 중복 방지)
-                           if check_title:
-                               existing = supabase.table('documents').select('id').eq(f"metadata->>title", check_title).execute()
-                               
-                               if not existing.data:  # 중복이 없을 경우에만 삽입
+                           try:
+                               # 제목 기반 중복 체크 (더 정확한 중복 방지)
+                               if check_title and len(check_title) > 10:  # 제목이 충분히 길 때만 중복 체크
+                                   # 뉴스의 경우 제목이 비슷할 수 있으므로 URL도 함께 체크
+                                   if source_type == "뉴스" and check_url:
+                                       existing = supabase.table('documents').select('id').eq(f"metadata->>url", check_url).execute()
+                                   else:
+                                       existing = supabase.table('documents').select('id').eq(f"metadata->>title", check_title).execute()
+                                   
+                                   if not existing.data:  # 중복이 없을 경우에만 삽입
+                                       result = supabase.table('documents').insert(data).execute()
+                                       saved_count += 1
+                                       if source_type == "뉴스":
+                                           st.sidebar.success(f"뉴스 항목 저장: {title[:30]}...")  # 디버깅용
+                                   else:
+                                       if source_type == "뉴스":
+                                           st.sidebar.info(f"중복 뉴스 건너뜀: {title[:30]}...")  # 디버깅용
+                               else:
+                                   # 제목이 없거나 너무 짧으면 그냥 저장
                                    result = supabase.table('documents').insert(data).execute()
                                    saved_count += 1
-                               # else:
-                               #     st.info(f"중복 제목으로 건너뜀: {check_title}")
-                           else:
-                               # 제목이 없어도 저장
-                               result = supabase.table('documents').insert(data).execute()
-                               saved_count += 1
+                                   if source_type == "뉴스":
+                                       st.sidebar.success(f"뉴스 항목 저장 (제목 없음)")  # 디버깅용
+                           
+                           except Exception as e:
+                               st.warning(f"뉴스 항목 {i+1} 저장 중 상세 오류: {str(e)}")
+                               # 오류가 발생해도 계속 진행
+                               try:
+                                   # 메타데이터 없이 단순하게 저장 시도
+                                   simple_data = {
+                                       'content': full_text,
+                                       'embedding': embedding,
+                                       'metadata': {'title': title, 'collection': source_type}
+                                   }
+                                   result = supabase.table('documents').insert(simple_data).execute()
+                                   saved_count += 1
+                                   if source_type == "뉴스":
+                                       st.sidebar.warning(f"뉴스 항목 단순 저장: {title[:30]}...")
+                               except Exception as e2:
+                                   if source_type == "뉴스":
+                                       st.sidebar.error(f"뉴스 항목 완전 실패: {str(e2)}")
+                               continue
                            
                        except Exception as e:
                            st.warning(f"항목 {i+1} 저장 중 오류: {str(e)}")
@@ -451,8 +508,8 @@ def get_user_prompt(query, context_text, source_type):
 5. 기사들 간에 상충되는 정보가 있다면 이를 언급하고 각 관점을 공정하게 제시하세요.
 6. 제공된 기사 내용만 사용하고, 기사에 없는 내용은 추측하거나 답변하지 마세요."""
 
-   elif source_type == "쇼핑":
-       return f"""다음은 네이버 쇼핑에서 수집한 상품 정보입니다:
+  elif source_type == "쇼핑":
+      return f"""다음은 네이버 쇼핑에서 수집한 상품 정보입니다:
 
 {context_text}
 
@@ -467,8 +524,8 @@ def get_user_prompt(query, context_text, source_type):
 5. 상품의 특징을 비교할 때는 "A 제품은 X 기능이 있지만, B 제품은 Y 기능이 강조됩니다"와 같이 객관적으로 설명해주세요.
 6. 제공된 상품 정보만 사용하고, 문서에 없는 내용은 추측하거나 답변하지 마세요."""
 
-   else:
-       return f"""다음은 네이버 검색에서 수집한 데이터입니다:
+  else:
+      return f"""다음은 네이버 검색에서 수집한 데이터입니다:
 
 {context_text}
 
@@ -485,72 +542,72 @@ def get_user_prompt(query, context_text, source_type):
 7. 필요한 경우 정보의 출처를 언급해주세요(예: "문서 2에 따르면...")."""
 
 def generate_answer_with_gpt(query, search_results, source_type):
-   """GPT-4o-mini를 사용하여 검색 결과에 기반한 답변 생성"""
-   try:
-       # 검색 결과가 없는 경우
-       if not search_results:
-           return f"죄송합니다. 입력하신 '{query}'에 대한 {source_type} 검색 결과를 찾을 수 없습니다. 다른 검색어나 다른 소스 타입으로 시도해보세요."
-           
-       # 검색 결과를 컨텍스트로 정리
-       contexts = []
-       for i, result in enumerate(search_results[:5]):  # 상위 5개 결과만 사용
-           content = result['content']
-           
-           # metadata 확인 (JSON 문자열일 경우 파싱)
-           metadata = result.get('metadata', {})
-           if isinstance(metadata, str):
-               try:
-                   metadata = json.loads(metadata)
-               except:
-                   metadata = {}
-                   
-           title = metadata.get('title', '제목 없음')
-           date = metadata.get('date', '')  # 날짜 정보가 있으면 추가
-           
-           # 날짜 정보가 있으면 포함
-           date_info = f" (작성일: {date})" if date else ""
-           
-           # 소스 타입에 맞는 추가 정보
-           if source_type == "블로그" and 'bloggername' in metadata:
-               source_info = f" - 블로거: {metadata['bloggername']}"
-           elif source_type == "뉴스" and 'publisher' in metadata:
-               source_info = f" - 출처: {metadata['publisher']}"
-           elif source_type == "쇼핑" and 'mallname' in metadata:
-               price_info = f", 가격: {metadata.get('lprice', '정보 없음')}원" if 'lprice' in metadata else ""
-               source_info = f" - 판매처: {metadata['mallname']}{price_info}"
-           else:
-               source_info = ""
-           
-           # 유사도 점수 추가
-           similarity = result.get('similarity', 0) * 100
-           similarity_info = f" (유사도: {similarity:.1f}%)"
-           
-           # 출처 타입과 함께 컨텍스트 추가
-           contexts.append(f"문서 {i+1} - [{source_type}] {title}{date_info}{source_info}{similarity_info}:\n{content}\n")
-       
-       context_text = "\n".join(contexts)
-       
-       # 소스 타입에 맞는 프롬프트 생성
-       system_prompt = get_system_prompt(source_type)
-       user_prompt = get_user_prompt(query, context_text, source_type)
+  """GPT-4o-mini를 사용하여 검색 결과에 기반한 답변 생성"""
+  try:
+      # 검색 결과가 없는 경우
+      if not search_results:
+          return f"죄송합니다. 입력하신 '{query}'에 대한 {source_type} 검색 결과를 찾을 수 없습니다. 다른 검색어나 다른 소스 타입으로 시도해보세요."
+          
+      # 검색 결과를 컨텍스트로 정리
+      contexts = []
+      for i, result in enumerate(search_results[:5]):  # 상위 5개 결과만 사용
+          content = result['content']
+          
+          # metadata 확인 (JSON 문자열일 경우 파싱)
+          metadata = result.get('metadata', {})
+          if isinstance(metadata, str):
+              try:
+                  metadata = json.loads(metadata)
+              except:
+                  metadata = {}
+                  
+          title = metadata.get('title', '제목 없음')
+          date = metadata.get('date', '')  # 날짜 정보가 있으면 추가
+          
+          # 날짜 정보가 있으면 포함
+          date_info = f" (작성일: {date})" if date else ""
+          
+          # 소스 타입에 맞는 추가 정보
+          if source_type == "블로그" and 'bloggername' in metadata:
+              source_info = f" - 블로거: {metadata['bloggername']}"
+          elif source_type == "뉴스" and 'publisher' in metadata:
+              source_info = f" - 출처: {metadata['publisher']}"
+          elif source_type == "쇼핑" and 'mallname' in metadata:
+              price_info = f", 가격: {metadata.get('lprice', '정보 없음')}원" if 'lprice' in metadata else ""
+              source_info = f" - 판매처: {metadata['mallname']}{price_info}"
+          else:
+              source_info = ""
+          
+          # 유사도 점수 추가
+          similarity = result.get('similarity', 0) * 100
+          similarity_info = f" (유사도: {similarity:.1f}%)"
+          
+          # 출처 타입과 함께 컨텍스트 추가
+          contexts.append(f"문서 {i+1} - [{source_type}] {title}{date_info}{source_info}{similarity_info}:\n{content}\n")
+      
+      context_text = "\n".join(contexts)
+      
+      # 소스 타입에 맞는 프롬프트 생성
+      system_prompt = get_system_prompt(source_type)
+      user_prompt = get_user_prompt(query, context_text, source_type)
 
-       # GPT-4o-mini로 답변 생성
-       response = openai_client.chat.completions.create(
-           model="gpt-4o-mini",
-           messages=[
-               {"role": "system", "content": system_prompt},
-               {"role": "user", "content": user_prompt}
-           ],
-           temperature=0.3,  # 일관성 있는 답변을 위해 낮은 온도 설정
-           max_tokens=1000   # 충분한 답변 길이
-       )
-       
-       return response.choices[0].message.content
-       
-   except Exception as e:
-       st.error(f"GPT 답변 생성 중 오류 발생: {str(e)}")
-       return "답변 생성 중 오류가 발생했습니다."
-       
+      # GPT-4o-mini로 답변 생성
+      response = openai_client.chat.completions.create(
+          model="gpt-4o-mini",
+          messages=[
+              {"role": "system", "content": system_prompt},
+              {"role": "user", "content": user_prompt}
+          ],
+          temperature=0.3,  # 일관성 있는 답변을 위해 낮은 온도 설정
+          max_tokens=1000   # 충분한 답변 길이
+      )
+      
+      return response.choices[0].message.content
+      
+  except Exception as e:
+      st.error(f"GPT 답변 생성 중 오류 발생: {str(e)}")
+      return "답변 생성 중 오류가 발생했습니다."
+
 # 메인 UI
 st.title("네이버 통합 검색 & 질의응답")
 st.write("시맨틱 검색 기술을 이용하여 네이버 데이터를 검색하고 질문에 답변합니다.")
@@ -865,7 +922,7 @@ st.sidebar.info(f"""
 - 한국어 특화 무료 임베딩 모델 적용
 - 소스 타입별 구조화된 텍스트 저장
 - 더 관대한 유사도 검색으로 결과 확보
-- 중복 체크 로직 개선
+- 중복 체크 로직 개선 (뉴스 URL 기반 중복 체크)
 
 💡 팁: 각 소스 타입에 적합한 질문을 입력하세요:
 - 블로그: 레시피, 여행 경험, 리뷰, DIY 방법 등
