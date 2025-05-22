@@ -12,3 +12,4 @@ pillow>=9.0.0
 sentence-transformers
 torch
 transformers
+requests==2.31.0
