@@ -21,19 +21,25 @@ supabase = create_client(supabase_url, supabase_key)
 # Sentence Transformer 모델 초기화 (무료)
 @st.cache_resource
 def load_embedding_model():
-    """임베딩 모델 로드 (캐시 사용으로 성능 최적화)"""
-    return SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
-
-embedding_model = load_embedding_model()
+    """임베딩 모델 로드 (1536차원으로 변경)"""
+    # 1536차원을 생성하는 더 큰 모델 사용
+    return SentenceTransformer('sentence-transformers/all-mpnet-base-v2')
 
 def generate_embedding(text):
-    """텍스트에서 임베딩 생성 (무료 모델 사용)"""
+    """텍스트에서 임베딩 생성 (1536차원)"""
     if not text or text.strip() == "":
         # 빈 텍스트인 경우 기본 임베딩 반환
-        return [0.0] * 384  # MiniLM 모델의 차원 수
+        return [0.0] * 768  # all-mpnet-base-v2는 768차원
     
     embedding = embedding_model.encode(text)
-    return embedding.tolist()
+    # 1536차원으로 패딩 또는 확장
+    embedding_list = embedding.tolist()
+    
+    # 768차원을 1536차원으로 확장 (0으로 패딩)
+    if len(embedding_list) < 1536:
+        embedding_list.extend([0.0] * (1536 - len(embedding_list)))
+    
+    return embedding_list[:1536]  # 정확히 1536차원만 반환
 
 def clean_html_tags(text):
     """HTML 태그 제거"""
