@@ -5,7 +5,8 @@ import tempfile
 from datetime import datetime
 from supabase import create_client
 import numpy as np
-from openai import OpenAI
+# from openai import OpenAI  # 이 줄 제거
+from sentence_transformers import SentenceTransformer  # 추가
 import dotenv
 import re
 
@@ -17,16 +18,22 @@ supabase_url = os.environ.get("SUPABASE_URL")
 supabase_key = os.environ.get("SUPABASE_KEY")
 supabase = create_client(supabase_url, supabase_key)
 
-# OpenAI 클라이언트 초기화 (벡터 임베딩용)
-openai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+# Sentence Transformer 모델 초기화 (무료)
+@st.cache_resource
+def load_embedding_model():
+    """임베딩 모델 로드 (캐시 사용으로 성능 최적화)"""
+    return SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
+
+embedding_model = load_embedding_model()
 
 def generate_embedding(text):
-    """텍스트에서 OpenAI 임베딩 생성"""
-    response = openai_client.embeddings.create(
-        input=text,
-        model="text-embedding-3-small"
-    )
-    return response.data[0].embedding
+    """텍스트에서 임베딩 생성 (무료 모델 사용)"""
+    if not text or text.strip() == "":
+        # 빈 텍스트인 경우 기본 임베딩 반환
+        return [0.0] * 384  # MiniLM 모델의 차원 수
+    
+    embedding = embedding_model.encode(text)
+    return embedding.tolist()
 
 def clean_html_tags(text):
     """HTML 태그 제거"""
@@ -155,7 +162,7 @@ def process_json_file(file_path, collection_name=None, source_type=None):
             if 'link' in item:
                 metadata['url'] = item['link']
             
-        # 임베딩 생성
+        # 임베딩 생성 (무료 모델 사용)
         embedding = generate_embedding(full_content)
         
         # Supabase에 데이터 삽입
@@ -172,6 +179,9 @@ def process_json_file(file_path, collection_name=None, source_type=None):
 
 # Streamlit 앱 UI
 st.title("네이버 JSON 파일을 Supabase에 저장하기")
+
+# 모델 정보 표시
+st.sidebar.info("🆓 무료 임베딩 모델 사용 중: paraphrase-multilingual-MiniLM-L12-v2")
 
 uploaded_file = st.file_uploader("JSON 파일 업로드", type=['json'])
 
