@@ -1,0 +1,11 @@
+# Base requirements
+streamlit>=1.29.0
+supabase>=1.0.3
+openai>=1.6.0
+python-dotenv>=1.0.0
+numpy>=1.24.0
+pandas>=1.3.0
+matplotlib>=3.4.0
+plotly>=5.8.0
+scikit-learn>=1.0.0
+pillow>=9.0.0
