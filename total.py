@@ -1,3 +1,16 @@
+다음은 사용자의 요청에 따라 수정된 Streamlit 애플리케이션 코드입니다.
+
+**주요 변경 사항:**
+
+1.  **페이지 제목 및 설명 변경**: "똑똑한 쇼핑을 위한 홈페이지"라는 컨셉에 맞게 제목과 설명을 수정했습니다.
+2.  **검색 소스 순서 변경**: 검색 소스 선택 옵션을 "쇼핑", "블로그", "뉴스" 순으로 변경하고, 기본 선택을 "쇼핑"으로 설정했습니다.
+3.  **삼성 노트북 기본 질문 추가 (쇼핑 탭)**:
+    * "쇼핑" 탭 선택 시, 삼성 노트북 관련 3가지 추천 질문 버튼이 표시됩니다.
+    * 각 버튼을 클릭하면 해당 질문이 검색창에 자동으로 입력됩니다.
+    * "쇼핑" 탭의 기본 검색어는 추천 질문 중 첫 번째 질문("삼성 노트북 최신 모델 추천해주세요.")으로 설정됩니다.
+4.  **내부 로직 수정**: 검색어(`query`)와 검색 소스(`source_type`)를 Streamlit의 세션 상태(`st.session_state`)를 통해 관리하도록 수정하여, UI 요소 간의 상호작용을 개선했습니다.
+
+```python
 import streamlit as st
 import os
 import json
@@ -14,7 +27,7 @@ import torch
 import time
 
 # 페이지 구성
-st.set_page_config(page_title="네이버 통합 검색", layout="wide")
+st.set_page_config(page_title="스마트 쇼핑 파인더", layout="wide")
 
 # 네이버 API 클라이언트 ID와 시크릿
 NAVER_CLIENT_ID = "9XhhxLV1IzDpTZagoBr1"
@@ -313,7 +326,7 @@ def search_naver_api(query, source_type, count=20):
                         except Exception as e:
                             st.warning(f"항목 {i+1} 저장 중 오류: {str(e)}")
                             continue
-                    
+                        
                     except Exception as e:
                         st.warning(f"항목 {i+1} 처리 중 오류: {str(e)}")
                         continue
@@ -500,8 +513,7 @@ def get_user_prompt(query, context_text, source_type):
 답변 작성 규칙:
 1. 한국어로 자연스럽게 답변해주세요.
 2. 상품의 가격, 기능, 특징 등을 객관적으로 설명하고 비교해주세요.
-3. 가격은 범위로 표현하고 정확한 가격이 있다면 언급해주세요
-. (예: "이 제품은 30,000원에서 50,000원 사이의 가격대를 형성하고 있습니다")
+3. 가격은 범위로 표현하고 정확한 가격이 있다면 언급해주세요. (예: "이 제품은 30,000원에서 50,000원 사이의 가격대를 형성하고 있습니다")
 4. 다양한 브랜드와 제품을 균형 있게 소개하고, 특정 상품을 지나치게 홍보하지 마세요.
 5. 상품의 특징을 비교할 때는 "A 제품은 X 기능이 있지만, B 제품은 Y 기능이 강조됩니다"와 같이 객관적으로 설명해주세요.
 6. 제공된 상품 정보만 사용하고, 문서에 없는 내용은 추측하거나 답변하지 마세요."""
@@ -524,393 +536,336 @@ def get_user_prompt(query, context_text, source_type):
 7. 필요한 경우 정보의 출처를 언급해주세요(예: "문서 2에 따르면...")."""
 
 def generate_answer_with_gpt(query, search_results, source_type):
-   """GPT-4o-mini를 사용하여 검색 결과에 기반한 답변 생성"""
-   try:
-       # 검색 결과가 없는 경우
-       if not search_results:
-           return f"죄송합니다. 입력하신 '{query}'에 대한 {source_type} 검색 결과를 찾을 수 없습니다. 다른 검색어나 다른 소스 타입으로 시도해보세요."
-           
-       # 검색 결과를 컨텍스트로 정리
-       contexts = []
-       for i, result in enumerate(search_results[:5]):  # 상위 5개 결과만 사용
-           content = result['content']
-           
-           # metadata 확인 (JSON 문자열일 경우 파싱)
-           metadata = result.get('metadata', {})
-           if isinstance(metadata, str):
-               try:
-                   metadata = json.loads(metadata)
-               except:
-                   metadata = {}
-                   
-           title = metadata.get('title', '제목 없음')
-           date = metadata.get('date', '')  # 날짜 정보가 있으면 추가
-           
-           # 날짜 정보가 있으면 포함
-           date_info = f" (작성일: {date})" if date else ""
-           
-           # 소스 타입에 맞는 추가 정보
-           if source_type == "블로그" and 'bloggername' in metadata:
-               source_info = f" - 블로거: {metadata['bloggername']}"
-           elif source_type == "뉴스" and 'publisher' in metadata:
-               source_info = f" - 출처: {metadata['publisher']}"
-           elif source_type == "쇼핑" and 'mallname' in metadata:
-               price_info = f", 가격: {metadata.get('lprice', '정보 없음')}원" if 'lprice' in metadata else ""
-               source_info = f" - 판매처: {metadata['mallname']}{price_info}"
-           else:
-               source_info = ""
-           
-           # 유사도 점수 추가
-           similarity = result.get('similarity', 0) * 100
-           similarity_info = f" (유사도: {similarity:.1f}%)"
-           
-           # 출처 타입과 함께 컨텍스트 추가
-           contexts.append(f"문서 {i+1} - [{source_type}] {title}{date_info}{source_info}{similarity_info}:\n{content}\n")
-       
-       context_text = "\n".join(contexts)
-       
-       # 소스 타입에 맞는 프롬프트 생성
-       system_prompt = get_system_prompt(source_type)
-       user_prompt = get_user_prompt(query, context_text, source_type)
+    """GPT-4o-mini를 사용하여 검색 결과에 기반한 답변 생성"""
+    try:
+        # 검색 결과가 없는 경우
+        if not search_results:
+            return f"죄송합니다. 입력하신 '{query}'에 대한 {source_type} 검색 결과를 찾을 수 없습니다. 다른 검색어나 다른 소스 타입으로 시도해보세요."
+            
+        # 검색 결과를 컨텍스트로 정리
+        contexts = []
+        for i, result in enumerate(search_results[:5]):  # 상위 5개 결과만 사용
+            content = result['content']
+            
+            # metadata 확인 (JSON 문자열일 경우 파싱)
+            metadata = result.get('metadata', {})
+            if isinstance(metadata, str):
+                try:
+                    metadata = json.loads(metadata)
+                except:
+                    metadata = {}
+                    
+            title = metadata.get('title', '제목 없음')
+            date = metadata.get('date', '')  # 날짜 정보가 있으면 추가
+            
+            # 날짜 정보가 있으면 포함
+            date_info = f" (작성일: {date})" if date else ""
+            
+            # 소스 타입에 맞는 추가 정보
+            if source_type == "블로그" and 'bloggername' in metadata:
+                source_info = f" - 블로거: {metadata['bloggername']}"
+            elif source_type == "뉴스" and 'publisher' in metadata:
+                source_info = f" - 출처: {metadata['publisher']}"
+            elif source_type == "쇼핑" and 'mallname' in metadata:
+                price_info = f", 가격: {metadata.get('lprice', '정보 없음')}원" if 'lprice' in metadata else ""
+                source_info = f" - 판매처: {metadata['mallname']}{price_info}"
+            else:
+                source_info = ""
+            
+            # 유사도 점수 추가
+            similarity = result.get('similarity', 0) * 100
+            similarity_info = f" (유사도: {similarity:.1f}%)"
+            
+            # 출처 타입과 함께 컨텍스트 추가
+            contexts.append(f"문서 {i+1} - [{source_type}] {title}{date_info}{source_info}{similarity_info}:\n{content}\n")
+        
+        context_text = "\n".join(contexts)
+        
+        # 소스 타입에 맞는 프롬프트 생성
+        system_prompt = get_system_prompt(source_type)
+        user_prompt = get_user_prompt(query, context_text, source_type)
 
-       # GPT-4o-mini로 답변 생성
-       response = openai_client.chat.completions.create(
-           model="gpt-4o-mini",
-           messages=[
-               {"role": "system", "content": system_prompt},
-               {"role": "user", "content": user_prompt}
-           ],
-           temperature=0.3,  # 일관성 있는 답변을 위해 낮은 온도 설정
-           max_tokens=1000   # 충분한 답변 길이
-       )
-       
-       return response.choices[0].message.content
-       
-   except Exception as e:
-       st.error(f"GPT 답변 생성 중 오류 발생: {str(e)}")
-       return "답변 생성 중 오류가 발생했습니다."
+        # GPT-4o-mini로 답변 생성
+        response = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.3,  # 일관성 있는 답변을 위해 낮은 온도 설정
+            max_tokens=1000    # 충분한 답변 길이
+        )
+        
+        return response.choices[0].message.content
+        
+    except Exception as e:
+        st.error(f"GPT 답변 생성 중 오류 발생: {str(e)}")
+        return "답변 생성 중 오류가 발생했습니다."
 
 # 메인 UI
-st.title("네이버 통합 검색 & 질의응답")
-st.write("시맨틱 검색 기술을 이용하여 네이버 데이터를 검색하고 질문에 답변합니다.")
+st.title("🛍️ 스마트 쇼핑 파인더: 네이버 검색 & AI 답변")
+st.write("똑똑한 쇼핑을 위한 맞춤형 검색! 네이버 쇼핑, 블로그, 뉴스 정보를 AI가 요약하고 답변해 드립니다.")
 
-# 검색 모드 선택
+# 검색 모드 선택 (사이드바)
 search_mode = st.sidebar.radio(
-   "검색 모드 선택", 
-   options=["시맨틱 검색 (저장된 데이터)", "새 데이터 수집 및 저장"], 
-   index=0
+    "검색 모드 선택",
+    options=["시맨틱 검색 (저장된 데이터)", "새 데이터 수집 및 저장"],
+    index=0
 )
 
-# 검색 소스 선택 (라디오 버튼) - 가로로 배치
-source_type = st.radio(
-   "검색 소스 선택", 
-   options=["블로그", "뉴스", "쇼핑"], 
-   index=0,
-   horizontal=True  # 가로로 배치
+# --- 검색 소스 및 질문 입력 로직 ---
+source_options = ["쇼핑", "블로그", "뉴스"] # 검색 소스 순서 변경: 쇼핑이 맨 앞
+samsung_laptop_questions = [
+    "삼성 노트북 최신 모델 추천해주세요.",
+    "삼성 노트북 갤럭시 북 시리즈 비교해주세요.",
+    "삼성 노트북 가성비 좋은 모델은 무엇인가요?"
+]
+default_queries_map = {
+    "쇼핑": samsung_laptop_questions[0], # 쇼핑 탭 기본 질문
+    "블로그": "안성탕면 맛있게 끓이는 방법이 뭐지?",
+    "뉴스": "최근 경제 이슈는 무엇인가요?"
+}
+
+# 세션 상태 초기화 (앱 로드 시 한 번만 실행되도록)
+if "query_input" not in st.session_state:
+    # 앱 처음 로드 시 기본 소스("쇼핑")의 기본 질문으로 초기화
+    st.session_state.query_input = default_queries_map[source_options[0]]
+if "current_source_type" not in st.session_state:
+    st.session_state.current_source_type = source_options[0] # 초기 소스 타입은 "쇼핑"
+
+# 검색 소스 변경 시 호출될 콜백 함수
+def source_type_on_change():
+    # st.session_state.source_type_radio_key 는 radio 버튼의 현재 선택된 값
+    new_source_type = st.session_state.source_type_radio_key 
+    st.session_state.current_source_type = new_source_type
+    st.session_state.query_input = default_queries_map[new_source_type]
+    # 콜백 내에서 st.rerun()은 Streamlit이 자동으로 처리하므로 명시적으로 호출할 필요 없음
+
+# 검색 소스 선택 라디오 버튼
+selected_source_from_radio = st.radio(
+    "검색 소스 선택",
+    options=source_options,
+    index=source_options.index(st.session_state.current_source_type), # 현재 세션 상태의 인덱스 사용
+    horizontal=True,
+    key="source_type_radio_key", # on_change 콜백에서 이 키를 통해 값을 참조
+    on_change=source_type_on_change
 )
+# selected_source_from_radio는 현재 UI의 값. 실제 관리되는 상태는 st.session_state.current_source_type
+active_source_type = st.session_state.current_source_type
 
-# 검색 입력 - 소스 타입에 따라 다른 예시 질문 제공
-if source_type == "블로그":
-   default_query = "안성탕면 맛있게 끓이는 방법이 뭐지?"
-   help_text = "블로그 데이터에서 레시피, 리뷰, 여행 경험 등을 검색해보세요"
-elif source_type == "뉴스":
-   default_query = "최근 경제 이슈는 무엇인가요?"
-   help_text = "뉴스 데이터에서 시사, 경제, 사회 이슈 등을 검색해보세요"
-elif source_type == "쇼핑":
-   default_query = "삼성노트북 최신 노트북이 뭐지?"
-   help_text = "쇼핑 데이터에서 상품 정보, 가격 비교, 구매 팁 등을 검색해보세요"
+# 검색 입력 필드 도움말 텍스트
+help_texts = {
+    "쇼핑": "삼성 노트북 추천 질문을 클릭하거나 직접 검색어를 입력하세요.",
+    "블로그": "블로그 관련 검색어를 입력하세요. (예: 안성탕면 레시피)",
+    "뉴스": "뉴스 관련 검색어를 입력하세요. (예: 최신 경제 동향)"
+}
+current_help_text = help_texts[active_source_type]
 
-# 검색 입력
-query = st.text_input("질문 입력", value=default_query, help=help_text)
+# 검색어 입력창
+user_typed_query = st.text_input(
+    "질문 입력",
+    value=st.session_state.query_input, # 세션 상태의 값을 표시
+    help=current_help_text,
+    key="query_text_input_widget" # 위젯 자체의 키
+)
+# 사용자가 직접 입력한 경우, 세션 상태 업데이트
+if user_typed_query != st.session_state.query_input:
+    st.session_state.query_input = user_typed_query
+    # 이 업데이트는 다음 rerun 시 반영됨 (타이핑 중 계속 rerun 방지)
+
+# "쇼핑" 탭일 때 삼성 노트북 추천 질문 버튼 표시
+if active_source_type == "쇼핑":
+    st.markdown("👇 **삼성 노트북 관련 추천 질문을 선택해보세요!**")
+    cols = st.columns(len(samsung_laptop_questions))
+    for i, q_text in enumerate(samsung_laptop_questions):
+        if cols[i].button(q_text, key=f"samsung_q_btn_{i}"):
+            st.session_state.query_input = q_text # 세션 상태 업데이트
+            st.rerun() # 버튼 클릭 시 텍스트 입력 필드를 즉시 업데이트하고 UI를 새로고침
+
+# 최종적으로 사용할 쿼리는 st.session_state.query_input
+query_to_use_in_search = st.session_state.query_input
 
 # 원본 검색 결과 표시 옵션
 show_raw_results = st.sidebar.checkbox("원본 검색 결과 표시", value=True)
 
 # 검색 결과 수 및 유사도 설정
 if search_mode == "시맨틱 검색 (저장된 데이터)":
-   col1, col2 = st.sidebar.columns(2)
-   with col1:
-       result_count = st.slider("검색 결과 수", min_value=3, max_value=20, value=10)
-   with col2:
-       similarity_threshold = st.slider("유사도 임계값", min_value=0.0, max_value=1.0, value=0.4, step=0.05)  # 기본값을 0.4로 낮춤
+    col1, col2 = st.sidebar.columns(2)
+    with col1:
+        result_count = st.slider("검색 결과 수", min_value=3, max_value=20, value=10)
+    with col2:
+        similarity_threshold = st.slider("유사도 임계값", min_value=0.0, max_value=1.0, value=0.4, step=0.05)
 else:
-   result_count = st.sidebar.slider("검색 결과 수", min_value=5, max_value=50, value=20)
+    result_count = st.sidebar.slider("검색 결과 수", min_value=5, max_value=50, value=20)
 
 # 검색 버튼
 search_button_text = "시맨틱 검색" if search_mode == "시맨틱 검색 (저장된 데이터)" else "데이터 수집 및 저장"
-if st.button(f"{source_type} {search_button_text}", key="search_button"):
-   if query:
-       if search_mode == "시맨틱 검색 (저장된 데이터)":
-           # 시맨틱 검색 모드
-           with st.spinner(f"{source_type} 시맨틱 검색 중..."):
-               try:
-                   # 시맨틱 검색 수행
-                   results = semantic_search(query, source_type=source_type, limit=result_count, match_threshold=similarity_threshold)
-                   
-                   if results:
-                       st.success(f"{len(results)}개의 {source_type} 결과를 찾았습니다.")
-                       
-                       # GPT로 답변 생성
-                       with st.spinner("AI 에이전트 답변 생성 중..."):
-                           gpt_answer = generate_answer_with_gpt(query, results, source_type)
-                           
-                           # 답변 표시
-                           st.markdown(f"## AI 답변 ({source_type} 데이터 기반)")
-                           st.markdown(gpt_answer)
-                           
-                           # 구분선
-                           st.markdown("---")
-                       
-                       # 원본 검색 결과 표시 옵션
-                       if show_raw_results:
-                           st.markdown(f"## {source_type} 검색 결과 원본")
-                           for i, result in enumerate(results):
-                               similarity = result['similarity'] * 100  # 백분율로 변환
-                               
-                               # 메타데이터 확인 (JSON 문자열일 경우 파싱)
-                               metadata = result.get('metadata', {})
-                               if isinstance(metadata, str):
-                                   try:
-                                       metadata = json.loads(metadata)
-                                   except:
-                                       metadata = {}
-                               
-                               title = metadata.get('title', '제목 없음')
-                               
-                               # URL 추출
-                               url = metadata.get('url', None)
-                               
-                               # 결과 표시
-                               with st.expander(f"{i+1}. {title} (유사도: {similarity:.2f}%)"):
-                                   st.write(f"**내용:** {result['content']}")
-                                   
-                                   # 메타데이터 정보 표시
-                                   meta_col1, meta_col2 = st.columns(2)
-                                   
-                                   with meta_col1:
-                                       if source_type == "블로그" and 'bloggername' in metadata:
-                                           st.write(f"**블로거:** {metadata['bloggername']}")
-                                       elif source_type == "뉴스" and 'publisher' in metadata:
-                                           st.write(f"**언론사:** {metadata['publisher']}")
-                                       elif source_type == "쇼핑" and 'maker' in metadata:
-                                           st.write(f"**제조사:** {metadata['maker']}")
-                                       elif source_type == "쇼핑" and 'brand' in metadata:
-                                           st.write(f"**브랜드:** {metadata['brand']}")
-                                           
-                                       if 'date' in metadata:
-                                           st.write(f"**날짜:** {metadata['date']}")
-                                   
-                                   with meta_col2:
-                                       if url:
-                                           st.markdown(f"**링크:** [원본 보기]({url})")
-                                       if source_type == "쇼핑":
-                                           if 'lprice' in metadata:
-                                               st.write(f"**최저가:** {metadata['lprice']}원")
-                                           if 'mallname' in metadata:
-                                               st.write(f"**판매처:** {metadata['mallname']}")
-                   else:
-                       st.warning(f"{source_type}에서 검색 결과가 없습니다. 새 데이터를 수집하거나 다른 검색어를 시도해보세요.")
-                       st.info("💡 팁: 유사도 임계값을 더 낮추거나, 다른 검색어로 시도해보세요.")
-               
-               except Exception as e:
-                   st.error(f"검색 중 오류가 발생했습니다: {str(e)}")
-       
-       else:
-           # 네이버 API 검색 및 저장 모드
-           with st.spinner(f"네이버 {source_type} API 검색 및 데이터 저장 중..."):
-               try:
-                   # 네이버 API 검색 수행 및 Supabase에 저장
-                   items, total_count, saved_count = search_naver_api(query, source_type, result_count)
-                   
-                   if items:
-                       st.success(f"네이버 {source_type}에서 총 {total_count}개 중 {len(items)}개의 결과를 찾았고, {saved_count}개를 새로 저장했습니다.")
-                       
-                       # 저장 후 즉시 시맨틱 검색 수행
-                       with st.spinner("저장된 데이터로 시맨틱 검색 중..."):
-                           # 잠시 대기 (데이터베이스 저장 완료 대기) - 시간 증가
-                           time.sleep(5)  # 5초 대기
-                           
-                           # 시맨틱 검색 수행 - 더 관대한 설정
-                           results = semantic_search(query, source_type=source_type, limit=result_count, match_threshold=0.3)
-                           
-                           if results:
-                               # GPT로 답변 생성
-                               with st.spinner("AI 에이전트 답변 생성 중..."):
-                                   gpt_answer = generate_answer_with_gpt(query, results, source_type)
-                                   
-                                   # 답변 표시
-                                   st.markdown(f"## AI 답변 ({source_type} 데이터 기반)")
-                                   st.markdown(gpt_answer)
-                                   
-                                   # 구분선
-                                   st.markdown("---")
-                           else:
-                               st.warning("데이터는 저장되었지만 시맨틱 검색에서 관련 결과를 찾지 못했습니다. 잠시 후 다시 시도해 보세요.")
-                               st.info("💡 새로 저장된 데이터의 임베딩 처리가 완료될 때까지 몇 분 정도 소요될 수 있습니다.")
-                       
-                       # 네이버 API 결과 표시
-                       if show_raw_results:
-                           st.markdown(f"## 네이버 {source_type} 검색 결과")
-                           
-                           # 데이터프레임으로 표시할 데이터 준비
-                           df_data = []
-                           for i, item in enumerate(items):
-                               try:
-                                   # HTML 태그 제거
-                                   title = re.sub('<[^<]+?>', '', item.get('title', '')) if item.get('title') else '제목 없음'
-                                   
-                                   # 소스 타입별 표시 항목
-                                   if source_type == "블로그":
-                                       description = re.sub('<[^<]+?>', '', item.get('description', '')) if item.get('description') else ''
-                                       df_data.append({
-                                           '제목': title,
-                                           '내용 미리보기': description[:100] + "..." if len(description) > 100 else description,
-                                           '블로거': item.get('bloggername', ''),
-                                           '날짜': item.get('postdate', ''),
-                                           '링크': item.get('link', '')
-                                       })
-                                   elif source_type == "뉴스":
-                                       description = re.sub('<[^<]+?>', '', item.get('description', '')) if item.get('description') else ''
-                                       df_data.append({
-                                           '제목': title,
-                                           '내용 미리보기': description[:100] + "..." if len(description) > 100 else description,
-                                           '언론사': item.get('originallink', '').replace('https://', '').replace('http://', '').split('/')[0] if item.get('originallink') else '',
-                                           '날짜': item.get('pubDate', ''),
-                                           '링크': item.get('link', '')
-                                       })
-                                   elif source_type == "쇼핑":
-                                       price_display = f"{item.get('lprice', '')}원" if item.get('lprice') else '가격 정보 없음'
-                                       df_data.append({
-                                           '제품명': title,
-                                           '가격': price_display,
-                                           '판매처': item.get('mallName', ''),
-                                           '제조사': item.get('maker', ''),
-                                           '링크': item.get('link', '')
-                                       })
-                               except Exception as e:
-                                   st.warning(f"항목 {i+1} 처리 중 오류: {str(e)}")
-                                   continue
-                           
-                           if df_data:
-                               # 데이터프레임 생성 및 표시
-                               df = pd.DataFrame(df_data)
-                               st.dataframe(df, use_container_width=True)
-                               
-                               # 각 결과 상세 내용 표시
-                               for i, item in enumerate(items):
-                                   try:
-                                       title = re.sub('<[^<]+?>', '', item.get('title', '')) if item.get('title') else '제목 없음'
-                                       
-                                       with st.expander(f"{i+1}. {title}"):
-                                           if source_type in ["블로그", "뉴스"]:
-                                               description = re.sub('<[^<]+?>', '', item.get('description', '')) if item.get('description') else ''
-                                               if description:
-                                                   st.write(f"**내용:** {description}")
-                                           
-                                           # 메타데이터 정보 표시
-                                           meta_col1, meta_col2 = st.columns(2)
-                                           
-                                           with meta_col1:
-                                               if source_type == "블로그":
-                                                   if item.get('bloggername'):
-                                                       st.write(f"**블로거:** {item.get('bloggername')}")
-                                                   if item.get('postdate'):
-                                                       st.write(f"**날짜:** {item.get('postdate')}")
-                                               elif source_type == "뉴스":
-                                                   if item.get('originallink'):
-                                                       publisher = item.get('originallink', '').replace('https://', '').replace('http://', '').split('/')[0]
-                                                       st.write(f"**언론사:** {publisher}")
-                                                   if item.get('pubDate'):
-                                                       st.write(f"**날짜:** {item.get('pubDate')}")
-                                               elif source_type == "쇼핑":
-                                                   if item.get('maker'):
-                                                       st.write(f"**제조사:** {item.get('maker')}")
-                                                   if item.get('brand'):
-                                                       st.write(f"**브랜드:** {item.get('brand')}")
-                                           
-                                           with meta_col2:
-                                               if item.get('link'):
-                                                   st.markdown(f"**링크:** [원본 보기]({item.get('link')})")
-                                               if source_type == "쇼핑":
-                                                   if item.get('lprice'):
-                                                       st.write(f"**최저가:** {item.get('lprice')}원")
-                                                   if item.get('mallName'):
-                                                       st.write(f"**판매처:** {item.get('mallName')}")
-                                   except Exception as e:
-                                       st.warning(f"항목 {i+1} 표시 중 오류: {str(e)}")
-                                       continue
-                           else:
-                               st.warning("표시할 수 있는 검색 결과가 없습니다.")
-                   else:
-                       st.warning(f"네이버 {source_type}에서 검색 결과가 없습니다. 다른 검색어나 다른 소스 타입으로 시도해보세요.")
-               
-               except Exception as e:
-                   st.error(f"검색 중 오류가 발생했습니다: {str(e)}")
-                   import traceback
-                   st.error(f"상세 오류: {traceback.format_exc()}")
-   else:
-       st.warning("질문을 입력하세요.")
+if st.button(f"{active_source_type}에서 {search_button_text}", key="search_button"):
+    if query_to_use_in_search:
+        if search_mode == "시맨틱 검색 (저장된 데이터)":
+            with st.spinner(f"{active_source_type} 시맨틱 검색 중..."):
+                try:
+                    results = semantic_search(query_to_use_in_search, source_type=active_source_type, limit=result_count, match_threshold=similarity_threshold)
+                    
+                    if results:
+                        st.success(f"{len(results)}개의 {active_source_type} 결과를 찾았습니다.")
+                        with st.spinner("AI 에이전트 답변 생성 중..."):
+                            gpt_answer = generate_answer_with_gpt(query_to_use_in_search, results, active_source_type)
+                            st.markdown(f"## AI 답변 ({active_source_type} 데이터 기반)")
+                            st.markdown(gpt_answer)
+                            st.markdown("---")
+                        
+                        if show_raw_results:
+                            st.markdown(f"## {active_source_type} 검색 결과 원본")
+                            for i, result in enumerate(results):
+                                similarity = result['similarity'] * 100
+                                metadata = result.get('metadata', {})
+                                if isinstance(metadata, str):
+                                    try: metadata = json.loads(metadata)
+                                    except: metadata = {}
+                                title = metadata.get('title', '제목 없음')
+                                url = metadata.get('url', None)
+                                with st.expander(f"{i+1}. {title} (유사도: {similarity:.2f}%)"):
+                                    st.write(f"**내용:** {result['content']}")
+                                    meta_col1, meta_col2 = st.columns(2)
+                                    with meta_col1:
+                                        if active_source_type == "블로그" and 'bloggername' in metadata: st.write(f"**블로거:** {metadata['bloggername']}")
+                                        elif active_source_type == "뉴스" and 'publisher' in metadata: st.write(f"**언론사:** {metadata['publisher']}")
+                                        elif active_source_type == "쇼핑" and 'maker' in metadata: st.write(f"**제조사:** {metadata['maker']}")
+                                        elif active_source_type == "쇼핑" and 'brand' in metadata: st.write(f"**브랜드:** {metadata['brand']}")
+                                        if 'date' in metadata: st.write(f"**날짜:** {metadata['date']}")
+                                    with meta_col2:
+                                        if url: st.markdown(f"**링크:** [원본 보기]({url})")
+                                        if active_source_type == "쇼핑":
+                                            if 'lprice' in metadata: st.write(f"**최저가:** {metadata['lprice']}원")
+                                            if 'mallname' in metadata: st.write(f"**판매처:** {metadata['mallname']}")
+                    else:
+                        st.warning(f"{active_source_type}에서 검색 결과가 없습니다. 새 데이터를 수집하거나 다른 검색어를 시도해보세요.")
+                        st.info("💡 팁: 유사도 임계값을 더 낮추거나, 다른 검색어로 시도해보세요.")
+                except Exception as e:
+                    st.error(f"검색 중 오류가 발생했습니다: {str(e)}")
+        
+        else: # 새 데이터 수집 및 저장 모드
+            with st.spinner(f"네이버 {active_source_type} API 검색 및 데이터 저장 중..."):
+                try:
+                    items, total_count, saved_count = search_naver_api(query_to_use_in_search, active_source_type, result_count)
+                    
+                    if items:
+                        st.success(f"네이버 {active_source_type}에서 총 {total_count}개 중 {len(items)}개의 결과를 찾았고, {saved_count}개를 새로 저장했습니다.")
+                        with st.spinner("저장된 데이터로 시맨틱 검색 중..."):
+                            time.sleep(5)
+                            results = semantic_search(query_to_use_in_search, source_type=active_source_type, limit=result_count, match_threshold=0.3)
+                            if results:
+                                with st.spinner("AI 에이전트 답변 생성 중..."):
+                                    gpt_answer = generate_answer_with_gpt(query_to_use_in_search, results, active_source_type)
+                                    st.markdown(f"## AI 답변 ({active_source_type} 데이터 기반)")
+                                    st.markdown(gpt_answer)
+                                    st.markdown("---")
+                            else:
+                                st.warning("데이터는 저장되었지만 시맨틱 검색에서 관련 결과를 찾지 못했습니다. 잠시 후 다시 시도해 보세요.")
+                                st.info("💡 새로 저장된 데이터의 임베딩 처리가 완료될 때까지 몇 분 정도 소요될 수 있습니다.")
+                        
+                        if show_raw_results:
+                            st.markdown(f"## 네이버 {active_source_type} 검색 결과")
+                            df_data = []
+                            for i, item in enumerate(items):
+                                try:
+                                    title = re.sub('<[^<]+?>', '', item.get('title', '')) if item.get('title') else '제목 없음'
+                                    if active_source_type == "블로그":
+                                        description = re.sub('<[^<]+?>', '', item.get('description', '')) if item.get('description') else ''
+                                        df_data.append({'제목': title, '내용 미리보기': description[:100] + "..." if len(description) > 100 else description, '블로거': item.get('bloggername', ''), '날짜': item.get('postdate', ''), '링크': item.get('link', '')})
+                                    elif active_source_type == "뉴스":
+                                        description = re.sub('<[^<]+?>', '', item.get('description', '')) if item.get('description') else ''
+                                        df_data.append({'제목': title, '내용 미리보기': description[:100] + "..." if len(description) > 100 else description, '언론사': item.get('originallink', '').replace('https://', '').replace('http://', '').split('/')[0] if item.get('originallink') else '', '날짜': item.get('pubDate', ''), '링크': item.get('link', '')})
+                                    elif active_source_type == "쇼핑":
+                                        price_display = f"{item.get('lprice', '')}원" if item.get('lprice') else '가격 정보 없음'
+                                        df_data.append({'제품명': title, '가격': price_display, '판매처': item.get('mallName', ''), '제조사': item.get('maker', ''), '링크': item.get('link', '')})
+                                except Exception as e:
+                                    st.warning(f"항목 {i+1} 처리 중 오류: {str(e)}")
+                                    continue
+                            if df_data:
+                                df = pd.DataFrame(df_data)
+                                st.dataframe(df, use_container_width=True)
+                                for i, item in enumerate(items):
+                                    try:
+                                        title = re.sub('<[^<]+?>', '', item.get('title', '')) if item.get('title') else '제목 없음'
+                                        with st.expander(f"{i+1}. {title}"):
+                                            if active_source_type in ["블로그", "뉴스"]:
+                                                description = re.sub('<[^<]+?>', '', item.get('description', '')) if item.get('description') else ''
+                                                if description: st.write(f"**내용:** {description}")
+                                            meta_col1, meta_col2 = st.columns(2)
+                                            with meta_col1:
+                                                if active_source_type == "블로그":
+                                                    if item.get('bloggername'): st.write(f"**블로거:** {item.get('bloggername')}")
+                                                    if item.get('postdate'): st.write(f"**날짜:** {item.get('postdate')}")
+                                                elif active_source_type == "뉴스":
+                                                    if item.get('originallink'): publisher = item.get('originallink', '').replace('https://', '').replace('http://', '').split('/')[0]; st.write(f"**언론사:** {publisher}")
+                                                    if item.get('pubDate'): st.write(f"**날짜:** {item.get('pubDate')}")
+                                                elif active_source_type == "쇼핑":
+                                                    if item.get('maker'): st.write(f"**제조사:** {item.get('maker')}")
+                                                    if item.get('brand'): st.write(f"**브랜드:** {item.get('brand')}")
+                                            with meta_col2:
+                                                if item.get('link'): st.markdown(f"**링크:** [원본 보기]({item.get('link')})")
+                                                if active_source_type == "쇼핑":
+                                                    if item.get('lprice'): st.write(f"**최저가:** {item.get('lprice')}원")
+                                                    if item.get('mallName'): st.write(f"**판매처:** {item.get('mallName')}")
+                                    except Exception as e:
+                                        st.warning(f"항목 {i+1} 표시 중 오류: {str(e)}")
+                                        continue
+                            else: st.warning("표시할 수 있는 검색 결과가 없습니다.")
+                    else:
+                        st.warning(f"네이버 {active_source_type}에서 검색 결과가 없습니다. 다른 검색어나 다른 소스 타입으로 시도해보세요.")
+                except Exception as e:
+                    st.error(f"검색 중 오류가 발생했습니다: {str(e)}")
+                    import traceback
+                    st.error(f"상세 오류: {traceback.format_exc()}")
+    else:
+        st.warning("질문을 입력하세요.")
 
 # 데이터베이스 상태
 st.sidebar.title("데이터베이스 상태")
 try:
-   # 전체 문서 수 가져오기
-   result = supabase.table('documents').select('id', count='exact').execute()
-   doc_count = result.count if hasattr(result, 'count') else len(result.data)
-   st.sidebar.info(f"저장된 총 문서 수: {doc_count}개")
-   
-   # 각 소스 타입별 문서 수 표시 시도
-   try:
-       collections = {}
-       collection_query = supabase.table('documents').select('metadata').execute()
-       for item in collection_query.data:
-           metadata = item.get('metadata', {})
-           if isinstance(metadata, str):
-               try:
-                   metadata = json.loads(metadata)
-               except:
-                   continue
-           
-           collection = metadata.get('collection', '기타')
-           if collection in collections:
-               collections[collection] += 1
-           else:
-               collections[collection] = 1
-       
-       # 소스 타입별 문서 수 표시
-       for collection, count in collections.items():
-           st.sidebar.info(f"{collection} 문서 수: {count}개")
-   except Exception as e:
-       st.sidebar.warning(f"소스별 통계 조회 실패: {str(e)}")
-       
+    result = supabase.table('documents').select('id', count='exact').execute()
+    doc_count = result.count if hasattr(result, 'count') else len(result.data)
+    st.sidebar.info(f"저장된 총 문서 수: {doc_count}개")
+    try:
+        collections = {}
+        collection_query = supabase.table('documents').select('metadata').execute()
+        for item in collection_query.data:
+            metadata = item.get('metadata', {})
+            if isinstance(metadata, str):
+                try: metadata = json.loads(metadata)
+                except: continue
+            collection = metadata.get('collection', '기타')
+            if collection in collections: collections[collection] += 1
+            else: collections[collection] = 1
+        for collection, count in collections.items():
+            st.sidebar.info(f"{collection} 문서 수: {count}개")
+    except Exception as e:
+        st.sidebar.warning(f"소스별 통계 조회 실패: {str(e)}")
 except Exception as e:
-   st.sidebar.error(f"데이터베이스 상태를 확인할 수 없습니다: {str(e)}")
+    st.sidebar.error(f"데이터베이스 상태를 확인할 수 없습니다: {str(e)}")
 
 # 뉴스 데이터 샘플 확인 버튼 추가
 if st.sidebar.button("뉴스 데이터 샘플 확인"):
-   try:
-       with st.spinner("뉴스 데이터 조회 중..."):
-           news_sample = supabase.table('documents').select('*').eq('metadata->>collection', '뉴스').limit(5).execute()
-           
-           if news_sample.data:
-               st.sidebar.write("### 저장된 뉴스 데이터 샘플")
-               for i, item in enumerate(news_sample.data):
-                   st.sidebar.write(f"**샘플 {i+1}:**")
-                   st.sidebar.write(f"내용: {item['content'][:100]}...")
-                   
-                   metadata = item.get('metadata', {})
-                   if isinstance(metadata, str):
-                       try:
-                           metadata = json.loads(metadata)
-                       except:
-                           metadata = {}
-                   
-                   st.sidebar.write(f"메타데이터: {metadata}")
-                   st.sidebar.write("---")
-           else:
-               st.sidebar.warning("저장된 뉴스 데이터가 없습니다.")
-   except Exception as e:
-       st.sidebar.error(f"뉴스 데이터 조회 실패: {str(e)}")
+    try:
+        with st.spinner("뉴스 데이터 조회 중..."):
+            news_sample = supabase.table('documents').select('*').eq('metadata->>collection', '뉴스').limit(5).execute()
+            if news_sample.data:
+                st.sidebar.write("### 저장된 뉴스 데이터 샘플")
+                for i, item in enumerate(news_sample.data):
+                    st.sidebar.write(f"**샘플 {i+1}:**")
+                    st.sidebar.write(f"내용: {item['content'][:100]}...")
+                    metadata = item.get('metadata', {})
+                    if isinstance(metadata, str):
+                        try: metadata = json.loads(metadata)
+                        except: metadata = {}
+                    st.sidebar.write(f"메타데이터: {metadata}")
+                    st.sidebar.write("---")
+            else:
+                st.sidebar.warning("저장된 뉴스 데이터가 없습니다.")
+    except Exception as e:
+        st.sidebar.error(f"뉴스 데이터 조회 실패: {str(e)}")
 
 # 사용 안내
 st.sidebar.title("사용 안내")
@@ -919,7 +874,7 @@ st.sidebar.info(f"""
 1. **시맨틱 검색 (저장된 데이터)**: 이미 저장된 데이터를 의미 기반으로 검색합니다.
 2. **새 데이터 수집 및 저장**: 네이버 API에서 새 데이터를 가져와 저장하고 검색합니다.
 
-**검색 소스 선택:** 블로그, 뉴스, 쇼핑 중에서 검색할 소스를 선택하세요.
+**검색 소스 선택:** 쇼핑, 블로그, 뉴스 중에서 검색할 소스를 선택하세요. 쇼핑이 기본입니다.
 
 **유사도 임계값:** 시맨틱 검색에서 얼마나 유사한 결과를 포함할지 결정합니다. 
 - 높음 (0.7~1.0): 매우 관련성 높은 결과만 표시
@@ -927,15 +882,17 @@ st.sidebar.info(f"""
 - 낮음 (0.1~0.3): 더 많은 결과를 포함하지만 관련성이 낮을 수 있음
 
 💡 **개선 사항:**
+- 쇼핑 정보 검색에 최적화
+- 삼성 노트북 관련 추천 질문 제공 (쇼핑 탭)
 - 뉴스 데이터 저장 형식 개선
 - 뉴스 전용 낮은 유사도 임계값 적용
 - 언론사 정보 추출 로직 개선
 - 뉴스 검색 쿼리 최적화
 
 💡 팁: 각 소스 타입에 적합한 질문을 입력하세요:
+- 쇼핑: 상품 정보, 가격 비교, 구매 팁 등 (예: 삼성 노트북 추천)
 - 블로그: 레시피, 여행 경험, 리뷰, DIY 방법 등
 - 뉴스: 시사 이슈, 사회 현상, 경제 동향 등
-- 쇼핑: 상품 정보, 가격 비교, 구매 팁 등
 """)
 
 # 네이버 API 정보 및 문제해결
@@ -954,15 +911,15 @@ st.sidebar.info("""
 # 추가 디버깅 정보 (개발용)
 st.sidebar.title("디버깅 정보")
 if st.sidebar.checkbox("디버깅 모드", value=False):
-   st.sidebar.write(f"현재 검색 모드: {search_mode}")
-   st.sidebar.write(f"선택된 소스: {source_type}")
-   st.sidebar.write(f"현재 쿼리: {query}")
-   st.sidebar.write(f"사용 중인 임베딩 모델: jhgan/ko-sroberta-multitask")
-   
-   # API 키 상태 확인
-   st.sidebar.write("**API 키 상태:**")
-   st.sidebar.write(f"- Supabase URL: {'✅' if supabase_url else '❌'}")
-   st.sidebar.write(f"- Supabase Key: {'✅' if supabase_key else '❌'}")
-   st.sidebar.write(f"- OpenAI Key: {'✅' if openai_api_key else '❌'}")
-   st.sidebar.write(f"- Naver Client ID: {'✅' if NAVER_CLIENT_ID else '❌'}")
-   st.sidebar.write(f"- Naver Client Secret: {'✅' if NAVER_CLIENT_SECRET else '❌'}")
+    st.sidebar.write(f"현재 검색 모드: {search_mode}")
+    st.sidebar.write(f"선택된 소스: {active_source_type}") # st.session_state.current_source_type
+    st.sidebar.write(f"현재 쿼리: {query_to_use_in_search}") # st.session_state.query_input
+    st.sidebar.write(f"사용 중인 임베딩 모델: jhgan/ko-sroberta-multitask")
+    
+    st.sidebar.write("**API 키 상태:**")
+    st.sidebar.write(f"- Supabase URL: {'✅' if supabase_url else '❌'}")
+    st.sidebar.write(f"- Supabase Key: {'✅' if supabase_key else '❌'}")
+    st.sidebar.write(f"- OpenAI Key: {'✅' if openai_api_key else '❌'}")
+    st.sidebar.write(f"- Naver Client ID: {'✅' if NAVER_CLIENT_ID else '❌'}")
+    st.sidebar.write(f"- Naver Client Secret: {'✅' if NAVER_CLIENT_SECRET else '❌'}")
+```
