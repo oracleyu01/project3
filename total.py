@@ -506,8 +506,8 @@ def get_user_prompt(query, context_text, source_type):
 5. 상품의 특징을 비교할 때는 "A 제품은 X 기능이 있지만, B 제품은 Y 기능이 강조됩니다"와 같이 객관적으로 설명해주세요.
 6. 제공된 상품 정보만 사용하고, 문서에 없는 내용은 추측하거나 답변하지 마세요."""
 
-   else:
-       return f"""다음은 네이버 검색에서 수집한 데이터입니다:
+    else:
+        return f"""다음은 네이버 검색에서 수집한 데이터입니다:
 
 {context_text}
 
