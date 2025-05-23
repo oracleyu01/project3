@@ -17,13 +17,13 @@ lxml>=4.9.0
 
 # Async HTTP requirements
 aiohttp>=3.9.0
-asyncio>=3.4.3
 
-# LangChain/LangGraph requirements
-langchain>=0.1.0
-langgraph>=0.0.20
-langsmith>=0.0.70
-langchain-core>=0.1.0
+# LangChain/LangGraph requirements - 최신 버전
+langchain>=0.2.0
+langgraph>=0.1.0
+langsmith>=0.1.0
+langchain-core>=0.2.0
+langchain-community>=0.2.0
 
 # Embedding model requirements
 sentence-transformers>=2.2.0
@@ -36,3 +36,4 @@ safetensors>=0.3.0
 # Additional utilities
 urllib3>=1.26.0
 typing-extensions>=4.8.0
+pydantic>=2.0.0
