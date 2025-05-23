@@ -16,13 +16,20 @@ import time
 from supabase import create_client
 from openai import OpenAI
 from sentence_transformers import SentenceTransformer
+
+# LangGraph imports 수정
 from langgraph.graph import StateGraph, END
-from langgraph.checkpoint import MemorySaver
+from langgraph.checkpoint.memory import MemorySaver  # 수정된 import 경로
 
 # LangSmith 추적 설정
-from langsmith import Client
-from langchain_core.tracers.context import tracing_v2_enabled
-
+try:
+    from langsmith import Client
+    from langchain_core.tracers.context import tracing_v2_enabled
+    LANGSMITH_AVAILABLE = True
+except ImportError:
+    LANGSMITH_AVAILABLE = False
+    st.warning("LangSmith가 설치되지 않았습니다. 추적 기능이 비활성화됩니다.")
+    
 # 페이지 구성
 st.set_page_config(page_title="스마트 쇼핑 파인더 (LangGraph Enhanced)", layout="wide")
 
