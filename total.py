@@ -1,16 +1,3 @@
-다음은 사용자의 요청에 따라 수정된 Streamlit 애플리케이션 코드입니다.
-
-**주요 변경 사항:**
-
-1.  **페이지 제목 및 설명 변경**: "똑똑한 쇼핑을 위한 홈페이지"라는 컨셉에 맞게 제목과 설명을 수정했습니다.
-2.  **검색 소스 순서 변경**: 검색 소스 선택 옵션을 "쇼핑", "블로그", "뉴스" 순으로 변경하고, 기본 선택을 "쇼핑"으로 설정했습니다.
-3.  **삼성 노트북 기본 질문 추가 (쇼핑 탭)**:
-    * "쇼핑" 탭 선택 시, 삼성 노트북 관련 3가지 추천 질문 버튼이 표시됩니다.
-    * 각 버튼을 클릭하면 해당 질문이 검색창에 자동으로 입력됩니다.
-    * "쇼핑" 탭의 기본 검색어는 추천 질문 중 첫 번째 질문("삼성 노트북 최신 모델 추천해주세요.")으로 설정됩니다.
-4.  **내부 로직 수정**: 검색어(`query`)와 검색 소스(`source_type`)를 Streamlit의 세션 상태(`st.session_state`)를 통해 관리하도록 수정하여, UI 요소 간의 상호작용을 개선했습니다.
-
-```python
 import streamlit as st
 import os
 import json
@@ -922,4 +909,4 @@ if st.sidebar.checkbox("디버깅 모드", value=False):
     st.sidebar.write(f"- OpenAI Key: {'✅' if openai_api_key else '❌'}")
     st.sidebar.write(f"- Naver Client ID: {'✅' if NAVER_CLIENT_ID else '❌'}")
     st.sidebar.write(f"- Naver Client Secret: {'✅' if NAVER_CLIENT_SECRET else '❌'}")
-```
+
