@@ -16,16 +16,14 @@ import time
 # 페이지 구성
 st.set_page_config(page_title="스마트 쇼핑 파인더", layout="wide")
 
-# 네이버 API 클라이언트 ID와 시크릿
-NAVER_CLIENT_ID = "9XhhxLV1IzDpTZagoBr1"
-NAVER_CLIENT_SECRET = "J14HFxv3B6"
-
 # Streamlit에서 실행 중인지 확인하고 secrets 가져오기
 try:
     # Streamlit Cloud 환경에서는 st.secrets 사용
     supabase_url = st.secrets["SUPABASE_URL"]
     supabase_key = st.secrets["SUPABASE_KEY"]
     openai_api_key = st.secrets["OPENAI_API_KEY"]
+    NAVER_CLIENT_ID = st.secrets["NAVER_CLIENT_ID"]
+    NAVER_CLIENT_SECRET = st.secrets["NAVER_CLIENT_SECRET"]
 except Exception as e:
     # 로컬 환경에서는 환경 변수 사용
     try:
@@ -34,6 +32,9 @@ except Exception as e:
         supabase_url = os.environ.get("SUPABASE_URL")
         supabase_key = os.environ.get("SUPABASE_KEY")
         openai_api_key = os.environ.get("OPENAI_API_KEY")
+        NAVER_CLIENT_ID = os.environ.get("NAVER_CLIENT_ID")
+        NAVER_CLIENT_SECRET = os.environ.get("NAVER_CLIENT_SECRET")
+
     except:
         st.error("API 키를 가져오는 데 실패했습니다. 환경 변수나 Streamlit Secrets가 제대로 설정되었는지 확인하세요.")
         st.stop()
@@ -609,8 +610,8 @@ samsung_laptop_questions = [
 ]
 default_queries_map = {
     "쇼핑": samsung_laptop_questions[0], # 쇼핑 탭 기본 질문
-    "블로그": "안성탕면 맛있게 끓이는 방법이 뭐지?",
-    "뉴스": "최근 경제 이슈는 무엇인가요?"
+    "블로그": "삼성 노트북에 대한 블러그 글 추천해주세요",
+    "뉴스": "삼성 노트북에 대한 최신 뉴스기사 뉴스를 추천해주세요"
 }
 
 # 세션 상태 초기화 (앱 로드 시 한 번만 실행되도록)
@@ -643,8 +644,8 @@ active_source_type = st.session_state.current_source_type
 # 검색 입력 필드 도움말 텍스트
 help_texts = {
     "쇼핑": "삼성 노트북 추천 질문을 클릭하거나 직접 검색어를 입력하세요.",
-    "블로그": "블로그 관련 검색어를 입력하세요. (예: 안성탕면 레시피)",
-    "뉴스": "뉴스 관련 검색어를 입력하세요. (예: 최신 경제 동향)"
+    "블로그": "블로그 관련 검색어를 입력하세요. (예: 삼성 노트북 사용 후기)",
+    "뉴스": "뉴스 관련 검색어를 입력하세요. (예: 삼성 노트북 최신 동향)"
 }
 current_help_text = help_texts[active_source_type]
 
@@ -909,4 +910,3 @@ if st.sidebar.checkbox("디버깅 모드", value=False):
     st.sidebar.write(f"- OpenAI Key: {'✅' if openai_api_key else '❌'}")
     st.sidebar.write(f"- Naver Client ID: {'✅' if NAVER_CLIENT_ID else '❌'}")
     st.sidebar.write(f"- Naver Client Secret: {'✅' if NAVER_CLIENT_SECRET else '❌'}")
-
